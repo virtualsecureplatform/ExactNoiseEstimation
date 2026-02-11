@@ -15,6 +15,7 @@ tail probabilities that are critical for setting security parameters.
 ExactNoiseEstimation/
   README.md
   extprod_alea.jl            # exact External Product noise via Alea.jl
+  cmux_alea.jl               # exact CMUX noise via Alea.jl
   alea/                      # Alea.jl (git submodule)
 ```
 
@@ -47,6 +48,12 @@ julia --project=alea -e "import Pkg; Pkg.instantiate()"
 
 ```bash
 julia --project=alea extprod_alea.jl
+```
+
+### 4. Run the Exact CMUX Analysis
+
+```bash
+julia --project=alea cmux_alea.jl
 ```
 
 Convolution backend options:
