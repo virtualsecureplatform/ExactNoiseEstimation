@@ -1,6 +1,3 @@
-[submodule "dice"]
-	path = dice
-	url = https://github.com/virtualsecureplatform/dice.git
 [submodule "alea"]
 	path = alea
 	url = https://github.com/Tractables/Alea.jl.git
