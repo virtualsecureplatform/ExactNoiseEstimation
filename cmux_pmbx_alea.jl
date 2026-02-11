@@ -397,13 +397,13 @@ function main()
     println("Step 3: CMUXPMBX noise distributions (binary TRGSW)")
     println("="^60)
 
-    # p=1 path (naive): c0 + ext_total (assumed independent of c0)
+    # p=1 path (naive): c0 + ext_total (assumed independent of c0, so no cancellation)
     naive_p1_arr, naive_p1_off = convolve_pair(ext_total_arr, ext_total_off, cbd_arr, cbd_off)
     # p=1 path (exact): c0 + ext_base + (X^a*e0 - e0) => ext_base + e_a
     exact_p1_arr, exact_p1_off = convolve_pair(ext_base_arr, ext_base_off, cbd_arr, cbd_off)
 
-    # p=0 path: output is c0 (noise e0)
-    p0_arr, p0_off = cbd_arr, cbd_off
+    # p=0 path: output is c0 + extprod(TRGSW(0), diff), so ext_base is still present.
+    p0_arr, p0_off = convolve_pair(ext_base_arr, ext_base_off, cbd_arr, cbd_off)
 
     cmux_naive_arr, cmux_naive_off = mix_two(naive_p1_arr, naive_p1_off, p0_arr, p0_off, 0.5)
     cmux_exact_arr, cmux_exact_off = mix_two(exact_p1_arr, exact_p1_off, p0_arr, p0_off, 0.5)

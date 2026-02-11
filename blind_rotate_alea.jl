@@ -333,11 +333,9 @@ function cmux_pmbx_exact_dist(p::TFHEParams)
 
     # p=1 path (exact): c0 + ext_base + (X^a*e0 - e0) => ext_base + e_a
     exact_p1_arr, exact_p1_off = convolve_pair(ext_base_arr, ext_base_off, cbd_arr, cbd_off)
-
-    # p=0 path: output is c0 (noise e0)
-    p0_arr, p0_off = cbd_arr, cbd_off
-
-    # Binary TRGSW: mix 0.5
+    # p=0 path: c0 + extprod(TRGSW(0), diff) => ext_base + e0
+    p0_arr, p0_off = convolve_pair(ext_base_arr, ext_base_off, cbd_arr, cbd_off)
+    # Under this model both branches have the same marginal PMF.
     cmux_exact_arr, cmux_exact_off = mix_two(exact_p1_arr, exact_p1_off, p0_arr, p0_off, 0.5)
 
     return cmux_exact_arr, cmux_exact_off
