@@ -16,6 +16,7 @@ ExactNoiseEstimation/
   README.md
   extprod_alea.jl            # exact External Product noise via Alea.jl
   cmux_alea.jl               # exact CMUX noise via Alea.jl
+  cmux_pmbx_alea.jl          # exact CMUXPMBX noise via Alea.jl
   alea/                      # Alea.jl (git submodule)
 ```
 
@@ -54,6 +55,12 @@ julia --project=alea extprod_alea.jl
 
 ```bash
 julia --project=alea cmux_alea.jl
+```
+
+### 5. Run the Exact CMUXPMBX Analysis
+
+```bash
+julia --project=alea cmux_pmbx_alea.jl
 ```
 
 Convolution backend options:
