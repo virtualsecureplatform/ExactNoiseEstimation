@@ -1,3 +1,4 @@
 [submodule "alea"]
 	path = alea
-	url = https://github.com/Tractables/Alea.jl.git
+	url = https://github.com/virtualsecureplatform/Alea.jl.git
+	branch = fft
