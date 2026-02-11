@@ -14,17 +14,11 @@ From: julia:1.12.1-bookworm
         bash -lc 'cd /work && julia --project=alea blind_rotate_alea.jl --loops=100'
 
     Notes:
-      - Defaults are tuned for lower memory pressure (single-thread).
       - Use --loops=<n> for scaling tests.
 
 %environment
     export LC_ALL=C.UTF-8
     export LANG=C.UTF-8
-    export JULIA_NUM_THREADS=1
-    export OPENBLAS_NUM_THREADS=1
-    export OMP_NUM_THREADS=1
-    export MKL_NUM_THREADS=1
-    export MALLOC_ARENA_MAX=2
     export PYTHONUNBUFFERED=1
 
 %post

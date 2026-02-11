@@ -98,8 +98,6 @@ apptainer exec --bind $PWD:/work ExactNoiseEstimation.sif \
   bash -lc 'cd /work && julia --project=alea blind_rotate_alea.jl --loops=100'
 ```
 
-The container defaults to single-thread execution (`JULIA_NUM_THREADS=1`) to reduce
-memory pressure and lower OOM risk on large convolutions.
 
 Convolution backend options:
 
