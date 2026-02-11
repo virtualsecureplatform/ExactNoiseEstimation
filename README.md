@@ -17,6 +17,7 @@ ExactNoiseEstimation/
   extprod_alea.jl            # exact External Product noise via Alea.jl
   cmux_alea.jl               # exact CMUX noise via Alea.jl
   cmux_pmbx_alea.jl          # exact CMUXPMBX noise via Alea.jl
+  blind_rotate_alea.jl       # Blind Rotate as repeated CMUXPMBX loops
   alea/                      # Alea.jl (git submodule)
 ```
 
@@ -63,6 +64,21 @@ julia --project=alea cmux_alea.jl
 julia --project=alea cmux_pmbx_alea.jl
 ```
 
+### 6. Run the Blind Rotate (n=636 CMUXPMBX loops)
+
+```bash
+julia --project=alea blind_rotate_alea.jl
+```
+
+To profile smaller loop counts (recommended before large runs):
+
+```bash
+julia --project=alea blind_rotate_alea.jl --loops=10
+julia --project=alea blind_rotate_alea.jl --loops=100
+```
+
+`blind_rotate_alea.jl` accepts `--loops=<n>` (or `BR_LOOPS=<n>`).
+
 Convolution backend options:
 
 - FFT (default, fast but approximate): `julia --project=alea extprod_alea.jl --conv=fft`
@@ -106,7 +122,7 @@ coefficient (index j=0) under the following toy parameters:
 
 The output noise decomposes into three independent components:
 
-### Component 1 — Nonce digit * CBD  (k*N = 4 terms)
+### Component 1 — Nonce digit * CBD  (`k*N` terms)
 
 Each term samples a ciphertext coefficient `c ~ Uniform[0, q)`,
 deterministically decomposes it into digits `d_0, d_1`, and multiplies
@@ -114,7 +130,7 @@ each digit by an independent `CBD(eta)` sample. The signs from negacyclic
 convolution do not affect the distribution (digit*CBD products are
 symmetric).
 
-### Component 2 — Main digit * CBD  (N = 4 terms)
+### Component 2 — Main digit * CBD  (`N` terms)
 
 Same structure as Component 1 but for the `b` polynomial row of the
 TRLWE.
@@ -123,7 +139,7 @@ TRLWE.
 
 - **Key * rounding**: `s[m] * eps_a[m]` where `s ~ Bernoulli(1/2)` and
   `eps` is the deterministic rounding error from decomposition. For
-  j=0 negacyclic convolution: 1 positive term, N-1 = 3 negative terms.
+  j=0 negacyclic convolution: 1 positive term, `N-1` negative terms.
   Signs matter here because `eps` is not symmetric.
 - **Direct rounding**: `-eps_b[0]` from the `b`-polynomial decomposition.
 - **Input noise**: `e[0] ~ CBD(eta)` from the fresh ciphertext.
