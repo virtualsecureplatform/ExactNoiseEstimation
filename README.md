@@ -79,6 +79,28 @@ julia --project=alea blind_rotate_alea.jl --loops=100
 
 `blind_rotate_alea.jl` accepts `--loops=<n>` (or `BR_LOOPS=<n>`).
 
+## Apptainer (HPC)
+
+An Apptainer definition is provided at:
+
+`apptainer/ExactNoiseEstimation.def`
+
+Build image:
+
+```bash
+apptainer build ExactNoiseEstimation.sif apptainer/ExactNoiseEstimation.def
+```
+
+Run from this repository (bind current directory):
+
+```bash
+apptainer exec --bind $PWD:/work ExactNoiseEstimation.sif \
+  bash -lc 'cd /work && julia --project=alea blind_rotate_alea.jl --loops=100'
+```
+
+The container defaults to single-thread execution (`JULIA_NUM_THREADS=1`) to reduce
+memory pressure and lower OOM risk on large convolutions.
+
 Convolution backend options:
 
 - FFT (default, fast but approximate): `julia --project=alea extprod_alea.jl --conv=fft`
