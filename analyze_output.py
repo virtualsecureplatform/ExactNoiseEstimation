@@ -153,6 +153,17 @@ def cbd_signed_dist(eta: int) -> dict[int, Fraction]:
     return {v: Fraction(comb(2 * eta, eta + v), total) for v in range(-eta, eta + 1)}
 
 
+def product_dist(dist_a: dict[int, Fraction],
+                 dist_b: dict[int, Fraction]) -> dict[int, Fraction]:
+    """Compute the distribution of X*Y where X ~ dist_a, Y ~ dist_b (independent)."""
+    result = {}
+    for a, pa in dist_a.items():
+        for b, pb in dist_b.items():
+            z = a * b
+            result[z] = result.get(z, Fraction(0)) + pa * pb
+    return result
+
+
 # ---------------------------------------------------------------------------
 # Gaussian-approximation variance (from keyvariation.py)
 # ---------------------------------------------------------------------------
@@ -215,17 +226,17 @@ def main():
 
     # Parameters
     N, k, l, la = 4, 1, 2, 2
-    Bgbit, Bg, eta, qbit = 2, 4, 1, 8
+    Bgbit, Bg, eta, qbit = 2, 4, 4, 15
     q = 1 << qbit
 
-    # Single-term programs
-    programs = {
-        "single_digit_cbd": os.path.join(gen_dir, "single_digit_cbd.dice"),
+    # Single-term programs (Dice validates decomposition; digit*CBD computed analytically)
+    dice_programs = {
+        "single_digit": os.path.join(gen_dir, "single_digit.dice"),
         "single_key_round": os.path.join(gen_dir, "single_key_round.dice"),
         "single_direct_round": os.path.join(gen_dir, "single_direct_round.dice"),
     }
     output_files = {name: os.path.join(gen_dir, f"output_{name}.txt")
-                    for name in programs}
+                    for name in dice_programs}
 
     # Run Dice or load pre-saved outputs
     print("=" * 60)
@@ -233,7 +244,7 @@ def main():
     print("=" * 60)
 
     raw_dists = {}
-    for name, dfile in programs.items():
+    for name, dfile in dice_programs.items():
         ofile = output_files[name]
         if args.from_files:
             if not os.path.exists(ofile):
@@ -259,8 +270,30 @@ def main():
         print(f"    {name}: support [{off},{off+len(arr)-1}], "
               f"mean={stats['mean']:.4f}, var={stats['variance']:.4f}")
 
-    # Also compute CBD distribution analytically
+    # Compute digit×CBD product analytically
+    print("\n  Computing digit×CBD(eta) product analytically...")
+    digit_signed = to_signed(
+        {k: Fraction(v) for k, v in zip(
+            range(len(raw_dists["single_digit"][0])),
+            raw_dists["single_digit"][0])
+         if v > 1e-15},
+        qbit
+    )
+    # Re-derive digit dist from Dice output as exact fractions
+    digit_arr_raw, digit_off_raw = raw_dists["single_digit"]
+    digit_dist_exact = {}
+    for i, p in enumerate(digit_arr_raw):
+        if p > 1e-15:
+            val = i + digit_off_raw
+            digit_dist_exact[val] = Fraction(p).limit_denominator(10**9)
     cbd_dist = cbd_signed_dist(eta)
+    digit_cbd_dist = product_dist(digit_dist_exact, cbd_dist)
+    digit_cbd_arr, digit_cbd_off = dist_to_array(digit_cbd_dist)
+    dcbd_stats = compute_stats(digit_cbd_arr, digit_cbd_off)
+    print(f"    digit*CBD: support [{digit_cbd_off},{digit_cbd_off+len(digit_cbd_arr)-1}], "
+          f"mean={dcbd_stats['mean']:.4f}, var={dcbd_stats['variance']:.4f}")
+
+    # Also compute CBD distribution analytically (for input noise)
     cbd_arr, cbd_off = dist_to_array(cbd_dist)
     raw_dists["input_cbd"] = (cbd_arr, cbd_off)
     cbd_stats = compute_stats(cbd_arr, cbd_off)
@@ -272,24 +305,23 @@ def main():
     print("Step 2: Build component distributions via convolution")
     print("=" * 60)
 
-    digit_arr, digit_off = raw_dists["single_digit_cbd"]
     key_arr, key_off = raw_dists["single_key_round"]
     direct_arr, direct_off = raw_dists["single_direct_round"]
 
-    # Component 1: Nonce digit×CBD = convolve k*N copies
-    nonce_count = k * N
-    nonce_arr, nonce_off = convolve_n(digit_arr, digit_off, nonce_count)
+    # Component 1: Nonce digit×CBD = convolve la*k*N copies of single digit×CBD
+    nonce_count = la * k * N
+    nonce_arr, nonce_off = convolve_n(digit_cbd_arr, digit_cbd_off, nonce_count)
     nonce_stats = compute_stats(nonce_arr, nonce_off)
-    print(f"\n  Nonce digit*CBD ({nonce_count} terms convolved):")
+    print(f"\n  Nonce digit*CBD ({nonce_count} digit*CBD terms convolved):")
     print(f"    Support: [{nonce_off}, {nonce_off + len(nonce_arr) - 1}]")
     print(f"    Mean:     {nonce_stats['mean']:.6f}")
     print(f"    Variance: {nonce_stats['variance']:.6f}")
 
-    # Component 2: Main digit×CBD = convolve N copies
-    main_count = N
-    main_arr, main_off = convolve_n(digit_arr, digit_off, main_count)
+    # Component 2: Main digit×CBD = convolve l*N copies of single digit×CBD
+    main_count = l * N
+    main_arr, main_off = convolve_n(digit_cbd_arr, digit_cbd_off, main_count)
     main_stats = compute_stats(main_arr, main_off)
-    print(f"\n  Main digit*CBD ({main_count} terms convolved):")
+    print(f"\n  Main digit*CBD ({main_count} digit*CBD terms convolved):")
     print(f"    Support: [{main_off}, {main_off + len(main_arr) - 1}]")
     print(f"    Mean:     {main_stats['mean']:.6f}")
     print(f"    Variance: {main_stats['variance']:.6f}")
