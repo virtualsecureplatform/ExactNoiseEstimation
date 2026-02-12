@@ -77,7 +77,15 @@ julia --project=alea blind_rotate_alea.jl --loops=10
 julia --project=alea blind_rotate_alea.jl --loops=100
 ```
 
-`blind_rotate_alea.jl` accepts `--loops=<n>` (or `BR_LOOPS=<n>`).
+`blind_rotate_alea.jl` accepts:
+
+- `--loops=<n>` (or `BR_LOOPS=<n>`)
+- `--loop-model=stateful|iid` (or `BR_LOOP_MODEL=stateful|iid`)
+
+`stateful` is the default and composes loops as
+`E_{t+1} = E_t (+) ext_base` (one carried noise term plus fresh ext-base
+noise per loop). `iid` keeps the legacy approximation that convolves
+the single-loop CMUXPMBX PMF with itself `n` times.
 
 ## Apptainer (HPC)
 
@@ -147,8 +155,8 @@ The output noise decomposes into three independent components:
 Each term samples a ciphertext coefficient `c ~ Uniform[0, q)`,
 deterministically decomposes it into digits `d_0, d_1`, and multiplies
 each digit by an independent `CBD(eta)` sample. The signs from negacyclic
-convolution do not affect the distribution (digit*CBD products are
-symmetric).
+convolution do not change this **single-term** marginal PMF
+(`digit*CBD` products are symmetric).
 
 ### Component 2 — Main digit * CBD  (`N` terms)
 
@@ -180,6 +188,13 @@ Even with BDD-based exact inference, a direct model of all `N` terms can
 blow up in size. Instead, we compute **one term** exactly in Alea and
 convolve `N` independent copies in Julia. This keeps the Alea programs
 small while still producing exact PMFs.
+
+For Blind Rotate, `blind_rotate_alea.jl` first computes one-loop
+CMUXPMBX terms, then composes `n` loops by convolution. In default
+`stateful` mode this uses one carried input-noise term and `n` fresh
+external-product base terms. So this repository does **not** avoid
+convolution; it relies on convolution at both component aggregation and
+Blind Rotate loop aggregation.
 
 ## Related Files
 

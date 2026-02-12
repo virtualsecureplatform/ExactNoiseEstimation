@@ -1,8 +1,11 @@
 #!/usr/bin/env julia
 """Exact noise estimation for TFHE Blind Rotate via CMUXPMBX loops.
 
-Models Blind Rotate as n=636 sequential CMUXPMBX operations and convolves
-n copies of the single-loop CMUXPMBX exact noise distribution.
+Models Blind Rotate as n sequential CMUXPMBX operations.
+Default loop composition is stateful:
+  E_{t+1} = E_t (+) ext_base
+where E_t is the carried ciphertext noise marginal and ext_base is the
+fresh external-product base noise for one loop.
 """
 
 import Pkg
@@ -267,6 +270,28 @@ function parse_loops()
     return env_loops == "" ? 636 : parse(Int, env_loops)
 end
 
+function parse_loop_model()
+    for arg in ARGS
+        if startswith(arg, "--loop-model=")
+            model = lowercase(split(arg, "=", limit=2)[2])
+            if model == "stateful" || model == "iid"
+                return Symbol(model)
+            else
+                error("Unknown --loop-model=$(model). Use stateful or iid.")
+            end
+        elseif arg == "--stateful"
+            return :stateful
+        elseif arg == "--iid"
+            return :iid
+        end
+    end
+    env_model = lowercase(get(ENV, "BR_LOOP_MODEL", "stateful"))
+    if env_model == "stateful" || env_model == "iid"
+        return Symbol(env_model)
+    end
+    error("Unknown BR_LOOP_MODEL=$(env_model). Use stateful or iid.")
+end
+
 function mix_two(a::Vector{Float64}, off_a::Int, b::Vector{Float64}, off_b::Int, wa::Float64)
     wb = 1.0 - wa
     minv = min(off_a, off_b)
@@ -282,7 +307,7 @@ function mix_two(a::Vector{Float64}, off_a::Int, b::Vector{Float64}, off_b::Int,
     return out, minv
 end
 
-function cmux_pmbx_exact_dist(p::TFHEParams)
+function cmux_pmbx_loop_terms(p::TFHEParams)
     c = uniform(DistUInt{p.qbit}, 0, p.q)
     digits = decompose_digits(c, p)
     d0 = digits[1]
@@ -325,12 +350,6 @@ function cmux_pmbx_exact_dist(p::TFHEParams)
     ext_base_arr, ext_base_off = convolve_pair(ext_base_arr, ext_base_off, key_noise_arr, key_noise_off)
     ext_base_arr, ext_base_off = convolve_pair(ext_base_arr, ext_base_off, direct_arr, direct_off)
 
-    # Input diff for CMUXPMBX: d = X^a * e0 - e0 with a uniform in [0, 2N)
-    neg_cbd_arr, neg_cbd_off = negate_dist(cbd_arr, cbd_off)
-    diff_arr, diff_off = convolve_pair(cbd_arr, cbd_off, neg_cbd_arr, neg_cbd_off)
-    p_zero = 1.0 / (2.0 * p.N)
-    diff_mix_arr, diff_mix_off = mix_two(diff_arr, diff_off, [1.0], 0, 1.0 - p_zero)
-
     # p=1 path (exact): c0 + ext_base + (X^a*e0 - e0) => ext_base + e_a
     exact_p1_arr, exact_p1_off = convolve_pair(ext_base_arr, ext_base_off, cbd_arr, cbd_off)
     # p=0 path: c0 + extprod(TRGSW(0), diff) => ext_base + e0
@@ -338,7 +357,14 @@ function cmux_pmbx_exact_dist(p::TFHEParams)
     # Under this model both branches have the same marginal PMF.
     cmux_exact_arr, cmux_exact_off = mix_two(exact_p1_arr, exact_p1_off, p0_arr, p0_off, 0.5)
 
-    return cmux_exact_arr, cmux_exact_off
+    return (
+        ext_base_arr=ext_base_arr,
+        ext_base_off=ext_base_off,
+        input_arr=cbd_arr,
+        input_off=cbd_off,
+        cmux_arr=cmux_exact_arr,
+        cmux_off=cmux_exact_off,
+    )
 end
 
 function main()
@@ -351,7 +377,9 @@ function main()
     println("Step 1: Single-loop CMUXPMBX exact distribution")
     println("="^60)
 
-    cmux_arr, cmux_off = cmux_pmbx_exact_dist(p)
+    terms = cmux_pmbx_loop_terms(p)
+    cmux_arr = terms.cmux_arr
+    cmux_off = terms.cmux_off
     cmux_stats = dist_stats(cmux_arr, cmux_off)
 
     @printf("\n  CMUXPMBX exact (single loop):\n")
@@ -364,7 +392,17 @@ function main()
     println("="^60)
 
     loops = parse_loops()
-    br_arr, br_off = convolve_n(cmux_arr, cmux_off, loops)
+    loop_model = parse_loop_model()
+    println("  Loop model: $(loop_model)")
+
+    if loop_model == :stateful
+        # Stateful composition: one carried noise term plus independent ext_base per loop.
+        ext_n_arr, ext_n_off = convolve_n(terms.ext_base_arr, terms.ext_base_off, loops)
+        br_arr, br_off = convolve_pair(ext_n_arr, ext_n_off, terms.input_arr, terms.input_off)
+    else
+        # Legacy approximation: i.i.d. convolution of single-loop CMUX output PMF.
+        br_arr, br_off = convolve_n(cmux_arr, cmux_off, loops)
+    end
     br_stats = dist_stats(br_arr, br_off)
 
     @printf("\n  Blind Rotate total (n=%d):\n", loops)
