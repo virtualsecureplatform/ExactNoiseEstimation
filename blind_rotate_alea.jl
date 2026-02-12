@@ -14,6 +14,7 @@ Pkg.activate(ALEA_PROJECT)
 
 using Alea
 using FFTW
+using JLD2
 using Printf
 
 struct TFHEParams
@@ -416,6 +417,14 @@ function main()
     for mult in 1:5
         @printf("      P(|X-mu|>%ds) = %.6e\n", mult, br_stats.tails[mult])
     end
+
+    # Save full PMF to JLD2
+    outdir = joinpath(@__DIR__, "generated")
+    mkpath(outdir)
+    outfile = joinpath(outdir, "br_n$(loops)_$(loop_model).jld2")
+    jldsave(outfile; br_arr, br_off, loops, loop_model=String(loop_model),
+            cmux_arr, cmux_off, params=p)
+    println("\n  PMF saved to $(outfile)")
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
