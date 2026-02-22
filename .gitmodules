@@ -2,3 +2,6 @@
 	path = alea
 	url = https://github.com/virtualsecureplatform/Alea.jl.git
 	branch = fft
+[submodule "Parameter-Selection"]
+	path = Parameter-Selection
+	url = https://github.com/virtualsecureplatform/Parameter-Selection.git
