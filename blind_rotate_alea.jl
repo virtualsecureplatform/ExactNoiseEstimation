@@ -13,7 +13,6 @@ const ALEA_PROJECT = joinpath(@__DIR__, "alea")
 Pkg.activate(ALEA_PROJECT)
 
 using Alea
-using FFTW
 using JLD2
 using Printf
 
@@ -136,116 +135,6 @@ function product_dist(a::Dict{Int, Float64}, b::Dict{Int, Float64})
     out
 end
 
-function normalize_pmf!(arr::Vector{Float64})
-    for i in eachindex(arr)
-        if arr[i] < 0 && arr[i] > -1e-12
-            arr[i] = 0.0
-        end
-    end
-    s = sum(arr)
-    s == 0.0 || (arr ./= s)
-    return arr
-end
-
-function convolve_fft(a::Vector{Float64}, b::Vector{Float64})
-    n = length(a) + length(b) - 1
-    nfft = nextpow(2, n)
-    apad = zeros(Float64, nfft)
-    bpad = zeros(Float64, nfft)
-    apad[1:length(a)] = a
-    bpad[1:length(b)] = b
-    fa = rfft(apad)
-    fb = rfft(bpad)
-    c = irfft(fa .* fb, nfft)
-    c = c[1:n]
-    normalize_pmf!(c)
-    return c
-end
-
-function convolve_exact(a::Vector{Float64}, b::Vector{Float64})
-    n = length(a) + length(b) - 1
-    c = zeros(Float64, n)
-    @inbounds for i in eachindex(a)
-        ai = a[i]
-        if ai != 0.0
-            for j in eachindex(b)
-                c[i + j - 1] += ai * b[j]
-            end
-        end
-    end
-    normalize_pmf!(c)
-    return c
-end
-
-function convolve_impl()
-    Alea.conv_mode() == :fft ? convolve_fft : convolve_exact
-end
-
-function convolve_pair(a::Vector{Float64}, off_a::Int, b::Vector{Float64}, off_b::Int)
-    conv = convolve_impl()
-    return conv(a, b), off_a + off_b
-end
-
-function convolve_n(arr::Vector{Float64}, off::Int, n::Int)
-    if n == 0
-        return [1.0], 0
-    end
-    res = [1.0]
-    base = arr
-    m = n
-    conv = convolve_impl()
-    while m > 0
-        if (m & 1) == 1
-            res = conv(res, base)
-        end
-        m >>= 1
-        if m > 0
-            base = conv(base, base)
-        end
-    end
-    return res, off * n
-end
-
-function negate_dist(arr::Vector{Float64}, off::Int)
-    new_off = -(off + length(arr) - 1)
-    return reverse(arr), new_off
-end
-
-function dist_stats(arr::Vector{Float64}, off::Int)
-    total = sum(arr)
-    if total == 0.0
-        return (mean=0.0, variance=0.0, std=0.0, total=0.0,
-                tails=Dict{Int, Float64}(), min=0, max=0)
-    end
-    mean = 0.0
-    for i in eachindex(arr)
-        mean += (off + (i - 1)) * arr[i]
-    end
-    mean /= total
-    var = 0.0
-    for i in eachindex(arr)
-        v = off + (i - 1) - mean
-        var += v * v * arr[i]
-    end
-    var /= total
-    std = sqrt(var)
-    tails = Dict{Int, Float64}()
-    for mult in 1:5
-        thresh = mult * std
-        tail = 0.0
-        for i in eachindex(arr)
-            v = off + (i - 1)
-            if abs(v - mean) > thresh
-                tail += arr[i]
-            end
-        end
-        tails[mult] = tail / total
-    end
-    minv = off
-    maxv = off + length(arr) - 1
-    return (mean=mean, variance=var, std=std, total=total, tails=tails, min=minv, max=maxv)
-end
-
 function parse_conv_mode()
     for arg in ARGS
         if arg == "--exact" || arg == "--conv=exact"
@@ -291,21 +180,6 @@ function parse_loop_model()
         return Symbol(env_model)
     end
     error("Unknown BR_LOOP_MODEL=$(env_model). Use stateful or iid.")
-end
-
-function mix_two(a::Vector{Float64}, off_a::Int, b::Vector{Float64}, off_b::Int, wa::Float64)
-    wb = 1.0 - wa
-    minv = min(off_a, off_b)
-    maxv = max(off_a + length(a) - 1, off_b + length(b) - 1)
-    out = zeros(Float64, maxv - minv + 1)
-    for i in eachindex(a)
-        out[(off_a - minv) + i] += wa * a[i]
-    end
-    for i in eachindex(b)
-        out[(off_b - minv) + i] += wb * b[i]
-    end
-    normalize_pmf!(out)
-    return out, minv
 end
 
 function cmux_pmbx_loop_terms(p::TFHEParams)
